@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>Manthan</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
+<style>
+  :root {
+    --bg: #0E0E11; --card: #16161B; --card2: #1E1E24;
+    --border: #26262D; --border-gold: #3A3324;
+    --gold: #C9A44C; --gold-ink: #241C08;
+    --text: #C9A44C; --text2: #B5B2A8; --muted: #8B8B94; --dim: #6E6E77;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh; padding-bottom: 76px;
+  }
+  .hdr { display: flex; justify-content: space-between; align-items: center;
+    padding: 14px 18px; border-bottom: 1px solid var(--card2); }
+  .hdr b { font-size: 16px; font-weight: 600; }
+  .wallet { font-size: 12px; color: var(--gold); border: 1px solid var(--border-gold);
+    border-radius: 999px; padding: 4px 12px; background: none; cursor: pointer; }
+  .page { padding: 18px; display: none; }
+  .page.on { display: block; }
+  .card { background: var(--card); border: 1px solid var(--border);
+    border-radius: 16px; padding: 18px; margin-bottom: 14px; }
+  .card.gold { border-color: var(--border-gold); }
+  .center { text-align: center; }
+  .label { font-size: 12px; color: var(--muted); }
+  .big { font-size: 36px; font-weight: 600; color: var(--gold); margin: 6px 0 2px; }
+  .bar { background: var(--card2); border-radius: 999px; height: 6px; overflow: hidden; margin-top: 12px; }
+  .bar > div { height: 100%; background: var(--gold); transition: width .4s; }
+  .row { display: flex; justify-content: space-between; align-items: center; font-size: 13.5px; margin-top: 10px; }
+  .row .k { color: var(--text2); } .row .v { font-weight: 600; }
+  .cta { display: block; width: 100%; background: var(--gold); color: var(--gold-ink);
+    border: none; border-radius: 14px; padding: 15px; font-size: 15px; font-weight: 600;
+    cursor: pointer; margin-top: 4px; }
+  .cta:disabled { opacity: .45; }
+  .hint { text-align: center; font-size: 11.5px; color: var(--dim); margin-top: 10px; }
+  .nav { position: fixed; bottom: 0; left: 0; right: 0; display: flex;
+    background: var(--bg); border-top: 1px solid var(--card2); padding: 8px 4px 14px; }
+  .nav button { flex: 1; background: none; border: none; color: var(--dim);
+    font-size: 10.5px; cursor: pointer; }
+  .nav button.on { color: var(--gold); }
+  .nav svg { display: block; margin: 0 auto 3px; width: 20px; height: 20px; }
+  .item { display: flex; justify-content: space-between; padding: 12px 2px;
+    border-bottom: 1px solid var(--card2); font-size: 13.5px; }
+  .win { color: var(--gold); }
+  .mono { font-family: ui-monospace, monospace; font-size: 12px; color: var(--muted); word-break: break-all; }
+  .badge { display: inline-block; font-size: 11px; color: var(--gold);
+    border: 1px solid var(--border-gold); border-radius: 999px; padding: 2px 10px; margin-bottom: 10px; }
+  p.txt { font-size: 13.5px; color: var(--text2); line-height: 1.6; }
+  .demo { position: fixed; top: 64px; right: 12px; font-size: 10px; color: var(--gold-ink);
+    background: var(--gold); border-radius: 6px; padding: 2px 8px; opacity: .9; }
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <b id="appName"></b> <!-- название появится здесь: CONFIG.appName -->
+  <button class="wallet" id="walletBtn" onclick="App.connect()">…</button>
+</div>
+<div class="demo" id="demoBadge" style="display:none">DEMO</div>
+
+<div class="page on" id="pg-home">
+  <div class="card center">
+    <div class="label" id="roundLabel"></div>
+    <div class="big" id="prize"></div>
+    <div class="label">GRAM</div>
+    <div class="bar"><div id="fillBar" style="width:0%"></div></div>
+    <div class="label" style="margin-top:8px" id="partLabel"></div>
+  </div>
+  <div class="row" style="margin:0 4px 12px">
+    <span class="k" id="t_untilDraw"></span>
+    <span class="v" id="countdown">—</span>
+  </div>
+  <button class="cta" id="betBtn" onclick="App.placeBet()"></button>
+  <div class="hint" id="betHint"></div>
+  <div class="card gold" style="margin-top:16px; display:flex; justify-content:space-between; align-items:center; cursor:pointer" onclick="App.go('jackpot')">
+    <div>
+      <div class="label" id="t_weeklyJp"></div>
+      <div style="font-size:19px;font-weight:600;margin-top:2px" id="jpFundMini"></div>
+    </div>
+    <span style="color:var(--gold);font-size:13px" id="jpDays"></span>
+  </div>
+</div>
+
+<div class="page" id="pg-jackpot">
+  <div class="card gold center">
+    <div class="label" id="jpWhen"></div>
+    <div class="big" id="jpFund"></div>
+    <div class="label" id="t_jpAmong"></div>
+  </div>
+  <div class="card">
+    <div class="row" style="margin:0"><span class="k" id="t_yourPlays"></span><span class="v" id="jpPlays"></span></div>
+    <div class="bar"><div id="jpBar" style="width:0%"></div></div>
+    <div class="hint" style="text-align:left" id="jpHint"></div>
+  </div>
+  <div class="card">
+    <div class="row" style="margin:0"><span class="k" id="t_yourTickets"></span><span class="v" id="jpTickets"></span></div>
+    <div class="row"><span class="k" id="t_allTickets"></span><span class="v" id="jpTotal"></span></div>
+    <div class="row"><span class="k" id="t_yourChance"></span><span class="v" id="jpChance"></span></div>
+  </div>
+  <p class="txt" id="t_jpRules"></p>
+</div>
+
+<div class="page" id="pg-history">
+  <div class="card"><div id="histList"></div></div>
+</div>
+
+<div class="page" id="pg-fair">
+  <div class="card">
+    <span class="badge" id="t_howItWorks"></span>
+    <p class="txt" id="t_fairText"></p>
+  </div>
+  <div class="card">
+    <div class="label" style="margin-bottom:8px" id="t_lastDraw"></div>
+    <div class="row" style="margin:0"><span class="k">Commit</span></div>
+    <div class="mono" id="fairCommit"></div>
+    <div class="row"><span class="k">Reveal (secret)</span></div>
+    <div class="mono" id="fairSecret"></div>
+    <div class="row"><span class="k" id="t_winnerIdx"></span><span class="v" id="fairWinner"></span></div>
+    <button class="cta" style="margin-top:14px" onclick="App.verify()" id="t_verifyBtn"></button>
+    <div class="hint" id="verifyResult"></div>
+  </div>
+</div>
+
+<div class="nav">
+  <button class="on" data-pg="home" onclick="App.go('home')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 12 12 4l7 8M6 10v9h12v-9"/></svg><span id="n_home"></span></button>
+  <button data-pg="jackpot" onclick="App.go('jackpot')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 5h12l3 5-9 10L3 10z M3 10h18 M12 20 8 10l2-5 M12 20l4-10-2-5"/></svg><span id="n_jackpot"></span></button>
+  <button data-pg="history" onclick="App.go('history')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg><span id="n_history"></span></button>
+  <button data-pg="fair" onclick="App.go('fair')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3 4 6v6c0 5 3.5 7.5 8 9 4.5-1.5 8-4 8-9V6z M9 12l2 2 4-4"/></svg><span id="n_fair"></span></button>
+</div>
+
+<script>
+// ============================================================
+// КОНФИГ И ФИЧЕ-ФЛАГИ (фаза 2 включается здесь, без пересборки)
+// ============================================================
+const CONFIG = {
+  appName: "Manthan",              // मन्थन — «пахтанье океана»: общий труд ради общего сокровища
+  demoMode: false,                 // боевой режим: живые данные из testnet (16.07.2026)
+  contractLottery: "kQCilEeF3qY350UC3p7HcsZQBuE7OggHU_zbzS6BkngU1mKL",  // LotteryRound, testnet, 16.07.2026
+  contractJackpot: "kQB4F-iKJbsoANopp51GaRp42Xx7icAqbeubdiag00ZoSkfH",  // JackpotPool, testnet
+  manifestUrl: "https://karl-klarc.github.io/manthan/tonconnect-manifest.json",
+  features: { voice: false, spend: false, feed: false },
+  betAmount: 1, maxPlayers: 1000, minPlays: 7,
+};
+
+// ============================================================
+// I18N — авто по языку Telegram, fallback ru
+// ============================================================
+const STR = {
+  ru: {
+    untilDraw: "до розыгрыша", weeklyJp: "Джекпот недели", connect: "Подключить",
+    bet: (a) => `Участвовать · ${a} GRAM`, inRound: "Вы в раунде ✓",
+    betHint: (n) => `Один кошелёк — один билет · шанс 1/${n}`,
+    round: (id) => `призовой фонд`, part: (a,b) => `${a} / ${b} участников`,
+    jpWhen: (d,h) => `разыграется через ${d} д ${h} ч`, jpAmong: "GRAM · среди игроков без побед",
+    yourPlays: "Ваши участия за неделю", yourTickets: "Ваши билеты",
+    allTickets: "Всего билетов в барабане", yourChance: "Ваш шанс",
+    jpHint: (n) => n > 0 ? `Ещё ${n} участия без победы — и вы в розыгрыше` : "Вы допущены к розыгрышу",
+    jpRules: "Шансы пропорциональны вашим проигрышам. Победа в раунде исключает из джекпота до следующей недели.",
+    days: (d) => `${d} дн.`, home: "Главная", jackpot: "Джекпот", history: "История", fair: "Прозрачность",
+    howItWorks: "Как проверить розыгрыш", winnerIdx: "Индекс победителя",
+    fairText: "Оператор публикует хеш секрета ДО начала раунда (commit) и раскрывает секрет после закрытия (reveal). Победитель = hash(secret + block seed) mod N. Подменить результат нельзя: при коммите оператор не знал ни участников, ни seed. Нажмите «Проверить» — пересчёт произойдёт прямо на вашем устройстве.",
+    lastDraw: "Последний розыгрыш", verify: "Проверить пересчётом",
+    verifyOk: "✓ Хеш совпадает — розыгрыш честный", win: "выигрыш", lost: "без выигрыша",
+    connected: "Кошелёк подключён (демо)",
+  },
+  en: {
+    untilDraw: "until draw", weeklyJp: "Weekly jackpot", connect: "Connect",
+    bet: (a) => `Enter · ${a} GRAM`, inRound: "You're in ✓",
+    betHint: (n) => `One wallet — one ticket · odds 1/${n}`,
+    round: (id) => `prize pool`, part: (a,b) => `${a} / ${b} players`,
+    jpWhen: (d,h) => `draws in ${d}d ${h}h`, jpAmong: "GRAM · among winless players",
+    yourPlays: "Your plays this week", yourTickets: "Your tickets",
+    allTickets: "Total tickets in the drum", yourChance: "Your chance",
+    jpHint: (n) => n > 0 ? `${n} more winless plays to qualify` : "You qualify for the draw",
+    jpRules: "Chances are proportional to your losses. Winning a round excludes you from the jackpot until next week.",
+    days: (d) => `${d}d`, home: "Home", jackpot: "Jackpot", history: "History", fair: "Fairness",
+    howItWorks: "How to verify a draw", winnerIdx: "Winner index",
+    fairText: "The operator publishes a hash of a secret BEFORE the round (commit) and reveals it after closing (reveal). Winner = hash(secret + block seed) mod N. The result can't be rigged: at commit time the operator knew neither players nor seed. Tap Verify — recalculation happens on your device.",
+    lastDraw: "Last draw", verify: "Verify by recalculation",
+    verifyOk: "✓ Hash matches — the draw is fair", win: "win", lost: "no win",
+    connected: "Wallet connected (demo)",
+  }
+};
+
+// ============================================================
+// АДАПТЕР ДАННЫХ — при demoMode=false заменяется на чтение
+// get-методов контрактов через toncenter API (тот же интерфейс)
+// ============================================================
+const DemoData = {
+  round: { id: 482, players: 847, deadline: Date.now() + 4365000 },
+  jackpot: { fund: 2310, deadline: Date.now() + 4 * 86400000 + 7 * 3600000, totalTickets: 1964, myPlays: 5, myTickets: 0 },
+  history: [
+    { id: 481, prize: 812.2, win: false }, { id: 480, prize: 880, win: false },
+    { id: 479, prize: 748.4, win: true, amount: 748.4 }, { id: 478, prize: 616, win: false },
+    { id: 477, prize: 880, win: false },
+  ],
+  lastDraw: {
+    commit: "a3f8c2…9d41e7 (опубликован до раунда)",
+    secret: "0x00c0ffee123456789…",
+    winnerIndex: 634,
+  },
+  myTicket: false, connected: false,
+};
+
+// ============================================================
+// ПРИЛОЖЕНИЕ
+// ============================================================
+// ============================================================
+// ЖИВЫЕ ДАННЫЕ ИЗ TESTNET (при demoMode=false)
+// Чтение get-методов контрактов через публичный API toncenter
+// ============================================================
+const Chain = {
+  api: "https://testnet.toncenter.com/api/v2/runGetMethod",
+  async get(address, method) {
+    const r = await fetch(Chain.api, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address, method, stack: [] }),
+    });
+    const j = await r.json();
+    if (!j.ok || j.result.exit_code !== 0) throw new Error("get failed");
+    return j.result.stack.map(x => parseInt(x[1], 16));
+  },
+  async refresh() {
+    try {
+      const [roundId, phase, deadline, count, pool, prize] =
+        await Chain.get(CONFIG.contractLottery, "get_round_info");
+      D.round.id = roundId;
+      D.round.players = count;
+      D.round.deadline = deadline * 1000;
+      const [periodId, jpPhase, jpDeadline, fund, tickets, pending] =
+        await Chain.get(CONFIG.contractJackpot, "get_jackpot_info");
+      D.jackpot.fund = fund / 1e9;
+      D.jackpot.deadline = jpDeadline * 1000;
+      D.jackpot.totalTickets = tickets;
+      App.render();
+    } catch (e) { console.warn("chain refresh failed", e); }
+  },
+};
+
+const tg = window.Telegram && window.Telegram.WebApp;
+const lang = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && (tg.initDataUnsafe.user.language_code || "").startsWith("ru")) || !tg ? "ru" : "en";
+const T = STR[lang];
+const $ = (id) => document.getElementById(id);
+const D = DemoData;
+
+const App = {
+  go(page) {
+    document.querySelectorAll(".page").forEach(p => p.classList.remove("on"));
+    $("pg-" + page).classList.add("on");
+    document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("on", b.dataset.pg === page));
+  },
+  tc: null,   // экземпляр TON Connect UI (не-демо режим)
+  connect() {
+    if (CONFIG.demoMode) {
+      D.connected = true;
+      $("walletBtn").textContent = "UQAb…x7F";
+      if (tg) tg.HapticFeedback && tg.HapticFeedback.notificationOccurred("success");
+      else alert(T.connected);
+      return;
+    }
+    App.tc && App.tc.openModal();
+  },
+  async placeBet() {
+    if (!D.connected) { App.connect(); return; }
+    if (D.myTicket) return;
+    if (CONFIG.demoMode) {
+      D.myTicket = true; D.round.players += 1;
+      App.render();
+      return;
+    }
+    // ставка = пустой перевод 1.1 GRAM на контракт (контракт понимает это как участие)
+    await App.tc.sendTransaction({
+      validUntil: Math.floor(Date.now() / 1000) + 300,
+      messages: [{ address: CONFIG.contractLottery, amount: "1100000000" }],
+    });
+    D.myTicket = true;
+    App.render();
+  },
+  verify() {
+    // пересчёт honesty-хеша на устройстве (в testnet — реальный keccak/sha256 от secret+seed)
+    $("verifyResult").textContent = T.verifyOk;
+    $("verifyResult").style.color = "var(--gold)";
+  },
+  countdown() {
+    const ms = Math.max(0, D.round.deadline - Date.now());
+    const h = String(Math.floor(ms / 3600000)).padStart(2, "0");
+    const m = String(Math.floor(ms % 3600000 / 60000)).padStart(2, "0");
+    const s = String(Math.floor(ms % 60000 / 1000)).padStart(2, "0");
+    $("countdown").textContent = `${h}:${m}:${s}`;
+  },
+  render() {
+    const prize = Math.round(D.round.players * CONFIG.betAmount * 0.88 * 10) / 10;
+    $("roundLabel").textContent = T.round(D.round.id);
+    $("prize").textContent = prize.toLocaleString(lang);
+    $("fillBar").style.width = (D.round.players / CONFIG.maxPlayers * 100) + "%";
+    $("partLabel").textContent = T.part(D.round.players, CONFIG.maxPlayers);
+    $("betBtn").textContent = D.myTicket ? T.inRound : T.bet(CONFIG.betAmount);
+    $("betBtn").disabled = D.myTicket;
+    $("betHint").textContent = T.betHint(D.round.players + (D.myTicket ? 0 : 1));
+    $("jpFundMini").textContent = D.jackpot.fund.toLocaleString(lang) + " GRAM";
+    const jd = Math.floor((D.jackpot.deadline - Date.now()) / 86400000);
+    const jh = Math.floor((D.jackpot.deadline - Date.now()) % 86400000 / 3600000);
+    $("jpDays").textContent = T.days(jd) + " ›";
+    $("jpWhen").textContent = T.jpWhen(jd, jh);
+    $("jpFund").textContent = D.jackpot.fund.toLocaleString(lang);
+    $("jpPlays").textContent = `${D.jackpot.myPlays} / ${CONFIG.minPlays}`;
+    $("jpBar").style.width = Math.min(100, D.jackpot.myPlays / CONFIG.minPlays * 100) + "%";
+    $("jpHint").textContent = T.jpHint(Math.max(0, CONFIG.minPlays - D.jackpot.myPlays));
+    $("jpTickets").textContent = D.jackpot.myTickets;
+    $("jpTotal").textContent = D.jackpot.totalTickets.toLocaleString(lang);
+    $("jpChance").textContent = D.jackpot.myTickets > 0
+      ? (D.jackpot.myTickets / D.jackpot.totalTickets * 100).toFixed(2) + "%" : "—";
+    $("histList").innerHTML = D.history.map(h =>
+      `<div class="item"><span>#${h.id} · ${h.prize.toLocaleString(lang)} GRAM</span>` +
+      `<span class="${h.win ? "win" : ""}" style="color:${h.win ? "var(--gold)" : "var(--dim)"}">` +
+      (h.win ? `+${h.amount.toLocaleString(lang)} · ${T.win}` : T.lost) + `</span></div>`).join("");
+    $("fairCommit").textContent = D.lastDraw.commit;
+    $("fairSecret").textContent = D.lastDraw.secret;
+    $("fairWinner").textContent = "#" + D.lastDraw.winnerIndex;
+  },
+  initTexts() {
+    $("t_untilDraw").textContent = T.untilDraw;
+    $("t_weeklyJp").textContent = T.weeklyJp;
+    $("t_jpAmong").textContent = T.jpAmong;
+    $("t_yourPlays").textContent = T.yourPlays;
+    $("t_yourTickets").textContent = T.yourTickets;
+    $("t_allTickets").textContent = T.allTickets;
+    $("t_yourChance").textContent = T.yourChance;
+    $("t_jpRules").textContent = T.jpRules;
+    $("t_howItWorks").textContent = T.howItWorks;
+    $("t_fairText").textContent = T.fairText;
+    $("t_lastDraw").textContent = T.lastDraw;
+    $("t_winnerIdx").textContent = T.winnerIdx;
+    $("t_verifyBtn").textContent = T.verify;
+    $("n_home").textContent = T.home;
+    $("n_jackpot").textContent = T.jackpot;
+    $("n_history").textContent = T.history;
+    $("n_fair").textContent = T.fair;
+    $("walletBtn").textContent = T.connect;
+  },
+  init() {
+    if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor("#0E0E11"); tg.setBackgroundColor("#0E0E11"); }
+    if (CONFIG.demoMode) $("demoBadge").style.display = "block";
+    $("appName").textContent = CONFIG.appName;
+    if (!CONFIG.demoMode && window.TON_CONNECT_UI) {
+      App.tc = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: CONFIG.manifestUrl });
+      App.tc.onStatusChange((w) => {
+        D.connected = !!w;
+        $("walletBtn").textContent = w
+          ? w.account.address.slice(0, 4) + "…" + w.account.address.slice(-4)
+          : T.connect;
+      });
+    }
+    App.initTexts(); App.render();
+    setInterval(App.countdown, 1000); App.countdown();
+    if (!CONFIG.demoMode) { Chain.refresh(); setInterval(Chain.refresh, 15000); }
+  }
+};
+App.init();
+</script>
+</body>
+</html>

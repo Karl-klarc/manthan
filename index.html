@@ -56,13 +56,32 @@
   p.txt { font-size: 13.5px; color: var(--text2); line-height: 1.6; }
   .demo { position: fixed; top: 64px; right: 12px; font-size: 10px; color: var(--gold-ink);
     background: var(--gold); border-radius: 6px; padding: 2px 8px; opacity: .9; }
+  .rules h3 { font-size: 14px; font-weight: 600; color: var(--gold); margin: 16px 0 6px; }
+  .rules h3:first-child { margin-top: 0; }
+  .rules p { font-size: 13.5px; color: var(--text2); line-height: 1.6; margin: 6px 0; }
+  .rules ul { padding-left: 18px; margin: 6px 0; }
+  .rules li { font-size: 13.5px; color: var(--text2); line-height: 1.6; margin: 4px 0; }
+  .overlay { position: fixed; inset: 0; background: rgba(10,10,13,.82); display: none;
+    align-items: flex-end; z-index: 50; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+  .overlay.on { display: flex; }
+  .sheet { background: var(--card); border: 1px solid var(--border-gold); border-bottom: none;
+    border-radius: 20px 20px 0 0; padding: 24px 20px calc(24px + env(safe-area-inset-bottom));
+    width: 100%; max-height: 85vh; overflow-y: auto; }
+  .sheet-title { font-size: 17px; font-weight: 600; color: var(--gold); margin-bottom: 12px; }
+  .chkrow { display: flex; align-items: flex-start; gap: 10px; margin: 16px 0 14px;
+    font-size: 14px; color: var(--text2); cursor: pointer; line-height: 1.4; }
+  .chkrow input { width: 18px; height: 18px; accent-color: var(--gold); flex-shrink: 0; margin-top: 1px; }
 </style>
 </head>
 <body>
 
 <div class="hdr">
   <b id="appName"></b> <!-- название появится здесь: CONFIG.appName -->
-  <button class="wallet" id="walletBtn" onclick="App.connect()">…</button>
+  <div style="display:flex;gap:8px;align-items:center">
+    <button class="wallet" id="langBtn" onclick="App.toggleLang()" style="color:var(--muted);border-color:var(--border)">EN</button>
+    <button class="wallet" id="demoBal" style="display:none">🎮</button>
+    <button class="wallet" id="walletBtn" onclick="App.connect()">…</button>
+  </div>
 </div>
 <div class="demo" id="demoBadge" style="display:none">DEMO</div>
 
@@ -105,6 +124,7 @@
     <div class="row"><span class="k" id="t_allTickets"></span><span class="v" id="jpTotal"></span></div>
     <div class="row"><span class="k" id="t_yourChance"></span><span class="v" id="jpChance"></span></div>
   </div>
+  <button class="cta" id="jpDrawBtn" style="display:none" onclick="App.jpDemoDraw()"></button>
   <p class="txt" id="t_jpRules"></p>
 </div>
 
@@ -129,6 +149,37 @@
   </div>
 </div>
 
+<div class="page rules" id="pg-rules">
+  <div id="rulesBody"></div>
+</div>
+
+<div class="overlay" id="consentOv">
+  <div class="sheet">
+    <div class="sheet-title" id="t_consentTitle"></div>
+    <div class="rules" id="consentBody"></div>
+    <label class="chkrow"><input type="checkbox" id="consentChk" onchange="App.consentToggle()">
+      <span id="t_consentChk"></span></label>
+    <button class="cta" id="consentBtn" disabled onclick="App.acceptConsent()"></button>
+  </div>
+</div>
+
+<div class="overlay" id="resultOv">
+  <div class="sheet center">
+    <div style="font-size:34px;margin-bottom:8px" id="resEmoji"></div>
+    <p class="txt" id="resText"></p>
+    <button class="cta" style="margin-top:16px" id="resAgain" onclick="App.simAgain()"></button>
+    <button class="wallet" style="margin-top:12px" id="resClose" onclick="App.closeResult()"></button>
+  </div>
+</div>
+
+<div class="overlay" id="testnetOv">
+  <div class="sheet center">
+    <div style="font-size:30px;margin-bottom:10px">🧪</div>
+    <p class="txt" id="t_testnetText" style="text-align:left"></p>
+    <button class="cta" style="margin-top:16px" id="t_testnetOk" onclick="App.closeTestnet()"></button>
+  </div>
+</div>
+
 <div class="nav">
   <button class="on" data-pg="home" onclick="App.go('home')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M5 12 12 4l7 8M6 10v9h12v-9"/></svg><span id="n_home"></span></button>
@@ -138,6 +189,8 @@
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg><span id="n_history"></span></button>
   <button data-pg="fair" onclick="App.go('fair')">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3 4 6v6c0 5 3.5 7.5 8 9 4.5-1.5 8-4 8-9V6z M9 12l2 2 4-4"/></svg><span id="n_fair"></span></button>
+  <button data-pg="rules" onclick="App.go('rules')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 4h9a3 3 0 0 1 3 3v13H8a2 2 0 0 1-2-2z M6 4v14 M10 9h5 M10 13h5"/></svg><span id="n_rules"></span></button>
 </div>
 
 <script>
@@ -152,6 +205,8 @@ const CONFIG = {
   manifestUrl: "https://karl-klarc.github.io/manthan/tonconnect-manifest.json",
   features: { voice: false, spend: false, feed: false },
   betAmount: 1, maxPlayers: 1000, minPlays: 7,
+  testnet: true,   // testnet: плашка при открытии вместо экрана согласия (rules-draft.md §2)
+  demoPlay: true, demoStart: 10,  // демо-счёт: игра без кошелька на виртуальные монеты
 };
 
 // ============================================================
@@ -174,6 +229,61 @@ const STR = {
     lastDraw: "Последний розыгрыш", verify: "Проверить пересчётом",
     verifyOk: "✓ Хеш совпадает — розыгрыш честный", win: "выигрыш", lost: "без выигрыша",
     connected: "Кошелёк подключён (демо)",
+    rules: "Правила",
+    consentTitle: "Прежде чем играть",
+    consentChk: "Понимаю и принимаю",
+    consentPlay: "Играть",
+    testnetText: "Это тестовая версия. Все монеты здесь — тестовые и не имеют никакой ценности. Играйте, ломайте, пишите нам о найденных ошибках.",
+    testnetOk: "Понятно",
+    demoBal: (b) => `🎮 ${b} GRAM`,
+    demoHint: "Демо-счёт: играете на виртуальные монеты, без кошелька. Шансы честные — как в настоящем раунде.",
+    demoRoundLabel: "демо-раунд · призовой фонд",
+    demoBet: (a) => `Попробовать · ${a} GRAM (демо)`,
+    demoWin: (p) => `Вы выиграли ${p} GRAM! Монеты зачислены на демо-счёт. Победа выводит из недельного джекпота — счётчики недели начаты заново.`,
+    demoLose: "В этот раз не повезло — так выглядит обычный исход. Шанс был честный: один из числа участников. Зато проигрыш добавил вам билет недельного джекпота.",
+    demoRefilled: "Демо-счёт пополнен. Играйте дальше!",
+    demoAgain: "Сыграть ещё", demoClose: "Закрыть", demoTag: "демо",
+    jpDemoWhen: "демо-джекпот · разыграется после 7-й игры без побед",
+    jpDemoDraw: "Разыграть демо-джекпот",
+    jpDemoWin: (p) => `🏆 Джекпот ваш! +${p} GRAM на демо-счёт. Счётчики новой недели — с нуля.`,
+    jpDemoLose: "Джекпот забрал другой игрок — билетов у него было больше. Новая неделя, счётчики обнулены.",
+    consentHtml: `<p>Подтвердите, что вы понимаете правила игры:</p><ul>
+      <li>Это игра на реальные средства. Выигрыш не гарантирован, потеря ставки — обычный исход.</li>
+      <li>Транзакции в блокчейне необратимы: отправленную ставку нельзя отменить.</li>
+      <li>Розыгрыш определяется алгоритмом, описанным в правилах; его честность можно проверить, но на его исход нельзя повлиять.</li>
+      <li>Я прочитал(а) правила и принимаю их.</li></ul>`,
+    rulesHtml: `<div class="card rules">
+      <h3>Как это работает</h3>
+      <p>Вы отправляете 1 GRAM — и получаете билет текущего раунда. Один кошелёк — один билет: у всех участников равные шансы. Раунд завершается, когда наберётся 1000 участников или наступит время розыгрыша (каждые ~3,5 часа) — что случится раньше. Если к моменту розыгрыша участников меньше двух, ставки просто переходят в следующий раунд — ничего не сгорает.</p>
+      <h3>Куда идут деньги раунда</h3>
+      <ul><li>88% — победителю раунда</li><li>7% — в недельный джекпот</li><li>5% — площадке за работу сервиса</li></ul>
+      <p>Эти проценты зашиты в смарт-контракт. Мы физически не можем изменить их задним числом или забрать призовой фонд — код открыт, проверьте сами.</p>
+      <h3>Недельный джекпот</h3>
+      <p>Каждую неделю разыгрывается джекпот среди тех, кому не везло: если за неделю вы сыграли 7 и более раз и ни разу не выиграли — вы в розыгрыше. Чем больше проигрышей за неделю, тем выше шанс: каждый проигрыш — дополнительный билет в барабане. Победа в любом раунде недели выводит из джекпота до следующей недели — утешительный приз только для тех, кто без выигрышей.</p>
+      <h3>Автоучастие</h3>
+      <p>Можно внести депозит (до 50 GRAM) — и участвовать в каждом раунде автоматически. Остановить можно в любой момент одной кнопкой: остаток вернётся мгновенно, ничьего разрешения для этого не нужно.</p>
+      <h3>Как проверить, что розыгрыш честный</h3>
+      <p>До начала раунда оператор публикует «отпечаток» секретного числа (хеш). После завершения раунда секрет раскрывается, и победитель определяется из секрета и данных блокчейна, которые оператор не контролирует. Подменить результат нельзя: на момент публикации отпечатка оператор не знал ни состава участников, ни данных будущего блока. На вкладке «Прозрачность» можно пересчитать результат любого розыгрыша прямо на своём устройстве.</p>
+      </div>
+      <div class="card rules gold">
+      <h3>Скажем прямо</h3>
+      <ul>
+      <li>Это азартная игра. В среднем игроки получают назад 88% поставленного (плюс часть возвращается через джекпот). Это значит: при долгой игре проигрыш — математическое ожидание, а не невезение. Играйте ради удовольствия, а не ради заработка.</li>
+      <li>Блокчейн не прощает ошибок: перевод на неправильный адрес или не той суммы невозможно отменить. Проверяйте адрес контракта на этой странице — и нигде больше.</li>
+      <li>Победы видны в блокчейне: адрес победителя и сумма публичны (это часть честности системы). Ваше имя при этом нигде не публикуется.</li>
+      </ul>
+      <h3>Адрес контракта — единственный настоящий</h3>
+      <div class="mono">${CONFIG.contractLottery}</div>
+      <p>Любой другой адрес, где бы вы его ни увидели, — мошенничество.</p>
+      </div>
+      <div class="card rules">
+      <h3>Рекомендации</h3>
+      <ul>
+      <li>Заведите отдельный кошелёк для игры и держите на нём только ту сумму, которую готовы потратить на развлечение.</li>
+      <li>Не играйте на деньги, которые нужны для жизни. Никогда.</li>
+      <li>Лимит автоучастия — ваш инструмент: внесите столько, сколько считаете разумным на неделю, и не пополняйте раньше срока.</li>
+      <li>Если замечаете, что игра перестала быть развлечением — тянет отыграться, скрываете траты, играете на заёмные — остановитесь и поговорите с кем-то, кому доверяете. Это важнее любого джекпота.</li>
+      </ul></div>`,
   },
   en: {
     untilDraw: "until draw", weeklyJp: "Weekly jackpot", connect: "Connect",
@@ -191,6 +301,61 @@ const STR = {
     lastDraw: "Last draw", verify: "Verify by recalculation",
     verifyOk: "✓ Hash matches — the draw is fair", win: "win", lost: "no win",
     connected: "Wallet connected (demo)",
+    rules: "Rules",
+    consentTitle: "Before you play",
+    consentChk: "I understand and accept",
+    consentPlay: "Play",
+    testnetText: "This is a test version. All coins here are test coins with no value whatsoever. Play, break things, and tell us about any bugs you find.",
+    testnetOk: "Got it",
+    demoBal: (b) => `🎮 ${b} GRAM`,
+    demoHint: "Demo account: play with virtual coins, no wallet needed. The odds are honest — same as a real round.",
+    demoRoundLabel: "demo round · prize pool",
+    demoBet: (a) => `Try it · ${a} GRAM (demo)`,
+    demoWin: (p) => `You won ${p} GRAM! Coins credited to your demo account. Winning removes you from the weekly jackpot — your week counters start over.`,
+    demoLose: "No luck this time — that's the usual outcome. The odds were honest: one out of all players. But the loss earned you a weekly jackpot ticket.",
+    demoRefilled: "Demo account refilled. Keep playing!",
+    demoAgain: "Play again", demoClose: "Close", demoTag: "demo",
+    jpDemoWhen: "demo jackpot · draws after your 7th winless game",
+    jpDemoDraw: "Draw the demo jackpot",
+    jpDemoWin: (p) => `🏆 The jackpot is yours! +${p} GRAM to your demo account. New week, counters start from zero.`,
+    jpDemoLose: "Another player took the jackpot — they had more tickets. New week, counters reset.",
+    consentHtml: `<p>Please confirm you understand the rules of the game:</p><ul>
+      <li>This game involves real money. Winning is not guaranteed; losing your stake is a normal outcome.</li>
+      <li>Blockchain transactions are irreversible: a placed bet cannot be cancelled.</li>
+      <li>The draw is determined by the algorithm described in the rules; its fairness can be verified, but its outcome cannot be influenced.</li>
+      <li>I have read the rules and accept them.</li></ul>`,
+    rulesHtml: `<div class="card rules">
+      <h3>How it works</h3>
+      <p>You send 1 GRAM — and get a ticket for the current round. One wallet — one ticket: every player has equal odds. A round ends when it reaches 1000 players or when draw time comes (every ~3.5 hours) — whichever happens first. If there are fewer than two players at draw time, bets simply roll over to the next round — nothing is lost.</p>
+      <h3>Where the round's money goes</h3>
+      <ul><li>88% — to the round winner</li><li>7% — to the weekly jackpot</li><li>5% — to the platform for running the service</li></ul>
+      <p>These percentages are hard-coded in the smart contract. We physically cannot change them retroactively or take the prize fund — the code is open, check for yourself.</p>
+      <h3>Weekly jackpot</h3>
+      <p>Every week a jackpot is drawn among the unlucky: if you played 7 or more times during the week and never won — you're in the draw. The more losses in a week, the higher your chance: every loss is an extra ticket in the drum. Winning any round during the week removes you from the jackpot until next week — the consolation prize is only for those without wins.</p>
+      <h3>Auto-play</h3>
+      <p>You can make a deposit (up to 50 GRAM) — and enter every round automatically. Stop any time with one button: the remainder comes back instantly, no one's permission needed.</p>
+      <h3>How to verify the draw is fair</h3>
+      <p>Before a round starts, the operator publishes a "fingerprint" of a secret number (its hash). After the round closes, the secret is revealed, and the winner is derived from the secret plus blockchain data the operator does not control. The result cannot be rigged: when the fingerprint was published, the operator knew neither the players nor the future block data. On the Fairness tab you can recalculate any draw right on your device.</p>
+      </div>
+      <div class="card rules gold">
+      <h3>Let's be honest</h3>
+      <ul>
+      <li>This is gambling. On average, players get back 88% of what they stake (plus a share returns via the jackpot). That means: over a long run, losing is the mathematical expectation, not bad luck. Play for fun, not for income.</li>
+      <li>The blockchain does not forgive mistakes: a transfer to the wrong address or of the wrong amount cannot be undone. Check the contract address on this page — and nowhere else.</li>
+      <li>Wins are visible on the blockchain: the winner's address and amount are public (that's part of the system's fairness). Your name is never published anywhere.</li>
+      </ul>
+      <h3>The one and only real contract address</h3>
+      <div class="mono">${CONFIG.contractLottery}</div>
+      <p>Any other address, wherever you see it, is a scam.</p>
+      </div>
+      <div class="card rules">
+      <h3>Recommendations</h3>
+      <ul>
+      <li>Set up a separate wallet for playing and keep on it only the amount you're prepared to spend on entertainment.</li>
+      <li>Never play with money you need to live on. Never.</li>
+      <li>The auto-play limit is your tool: deposit what you consider reasonable for the week, and don't top it up early.</li>
+      <li>If you notice the game has stopped being fun — you're chasing losses, hiding spending, playing with borrowed money — stop and talk to someone you trust. That matters more than any jackpot.</li>
+      </ul></div>`,
   }
 };
 
@@ -251,16 +416,57 @@ const Chain = {
 };
 
 const tg = window.Telegram && window.Telegram.WebApp;
-const lang = (tg && tg.initDataUnsafe && tg.initDataUnsafe.user && (tg.initDataUnsafe.user.language_code || "").startsWith("ru")) || !tg ? "ru" : "en";
-const T = STR[lang];
+let lang = localStorage.getItem("manthan_lang")
+  || (((tg && tg.initDataUnsafe && tg.initDataUnsafe.user && (tg.initDataUnsafe.user.language_code || "").startsWith("ru")) || !tg) ? "ru" : "en");
+let T = STR[lang];
 const $ = (id) => document.getElementById(id);
 const D = DemoData;
+
+// ============================================================
+// ДЕМО-СЧЁТ — игра на виртуальные монеты без кошелька.
+// Быстрый локальный раунд (15 с), шанс честный: 1 из N участников.
+// ============================================================
+const Sim = {
+  active: false, players: 0, deadline: 0,
+  get balance() {
+    const v = localStorage.getItem("manthan_demo_bal");
+    return v === null ? CONFIG.demoStart : +v;
+  },
+  set balance(v) { localStorage.setItem("manthan_demo_bal", Math.round(v * 10) / 10); },
+  loadHist() {
+    try { return JSON.parse(localStorage.getItem("manthan_demo_hist")) || []; }
+    catch { return []; }
+  },
+  saveHist(entry) {
+    const h = Sim.loadHist();
+    h.unshift(entry);
+    localStorage.setItem("manthan_demo_hist", JSON.stringify(h.slice(0, 20)));
+  },
+  // Демо-джекпот — та же механика, что в контракте JackpotPool:
+  // 7% каждого раунда в фонд, допуск = ≥7 участий без побед,
+  // билеты = проигрыши, победа в раунде выводит до «следующей недели».
+  jp: null,
+  freshJp() { return { fund: 0, plays: 0, losses: 0, bots: 25 + Math.floor(Math.random() * 30) }; },
+  loadJp() {
+    try { const j = JSON.parse(localStorage.getItem("manthan_demo_jp")); if (j) return j; }
+    catch {}
+    return Sim.freshJp();
+  },
+  saveJp() { localStorage.setItem("manthan_demo_jp", JSON.stringify(Sim.jp)); },
+};
+Sim.jp = Sim.loadJp();
 
 const App = {
   go(page) {
     document.querySelectorAll(".page").forEach(p => p.classList.remove("on"));
     $("pg-" + page).classList.add("on");
     document.querySelectorAll(".nav button").forEach(b => b.classList.toggle("on", b.dataset.pg === page));
+  },
+  toggleLang() {
+    lang = lang === "ru" ? "en" : "ru";
+    T = STR[lang];
+    localStorage.setItem("manthan_lang", lang);
+    App.initTexts(); App.render();
   },
   tc: null,   // экземпляр TON Connect UI (не-демо режим)
   connect() {
@@ -273,9 +479,85 @@ const App = {
     }
     App.tc && App.tc.openModal();
   },
+  // Согласие перед первой ставкой (rules-draft.md §2).
+  // В testnet вместо согласия — плашка при открытии (см. init).
+  consentToggle() { $("consentBtn").disabled = !$("consentChk").checked; },
+  acceptConsent() {
+    if (!$("consentChk").checked) return;
+    localStorage.setItem("manthan_consent", "1");
+    $("consentOv").classList.remove("on");
+    App.placeBet();
+  },
+  closeTestnet() { $("testnetOv").classList.remove("on"); },
+  // --- демо-игра ---
+  simPlay() {
+    if (Sim.active) return;
+    if (Sim.balance < CONFIG.betAmount) {
+      Sim.balance = CONFIG.demoStart;
+      $("resEmoji").textContent = "🎮";
+      $("resText").textContent = T.demoRefilled;
+      $("resultOv").classList.add("on");
+      App.render();
+      return;
+    }
+    Sim.balance -= CONFIG.betAmount;
+    Sim.active = true;
+    Sim.players = 6 + Math.floor(Math.random() * 7);   // 6–12 участников
+    Sim.deadline = Date.now() + 15000;
+    App.render();
+  },
+  simFinish() {
+    const win = Math.random() < 1 / Sim.players;       // честный шанс 1/N
+    const prize = Math.round(Sim.players * CONFIG.betAmount * 0.88 * 10) / 10;
+    Sim.active = false;
+    if (win) Sim.balance += prize;
+    const entry = { demo: true, prize, win, amount: prize };
+    D.history.unshift(entry);
+    Sim.saveHist(entry);
+    Sim.jp.fund = Math.round((Sim.jp.fund + Sim.players * CONFIG.betAmount * 0.07) * 100) / 100;
+    Sim.jp.plays += 1;
+    if (win) { Sim.jp.plays = 0; Sim.jp.losses = 0; }  // победа выводит из джекпота до следующей недели
+    else Sim.jp.losses += 1;
+    Sim.saveJp();
+    // в демо «неделя» сжата: допуск получен → джекпот разыгрывается сразу после этой игры
+    Sim.jpAuto = Sim.jp.plays >= CONFIG.minPlays && Sim.jp.losses > 0;
+    if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "warning");
+    $("resEmoji").textContent = win ? "🎉" : "😕";
+    $("resText").textContent = win ? T.demoWin(prize) : T.demoLose;
+    $("resultOv").classList.add("on");
+    App.render();
+  },
+  simAgain() {
+    if (Sim.jpAuto) { App.closeResult(); return; }  // сначала — авторозыгрыш джекпота
+    App.closeResult(); App.placeBet();
+  },
+  jpDemoDraw() {
+    const jp = Sim.jp;
+    const myT = jp.plays >= CONFIG.minPlays ? jp.losses : 0;
+    if (myT <= 0 || Sim.active) return;
+    const total = myT + jp.bots;
+    const win = Math.random() < myT / total;   // шансы пропорциональны проигрышам
+    const fund = jp.fund;
+    if (win) Sim.balance += fund;
+    Sim.jp = Sim.freshJp();                    // после розыгрыша счётчики недели обнуляются
+    Sim.saveJp();
+    if (tg && tg.HapticFeedback) tg.HapticFeedback.notificationOccurred(win ? "success" : "warning");
+    $("resEmoji").textContent = win ? "🏆" : "😕";
+    $("resText").textContent = win ? T.jpDemoWin(fund.toLocaleString(lang)) : T.jpDemoLose;
+    $("resultOv").classList.add("on");
+    App.render();
+  },
+  closeResult() {
+    $("resultOv").classList.remove("on");
+    if (Sim.jpAuto) { Sim.jpAuto = false; App.jpDemoDraw(); }
+  },
   async placeBet() {
+    if (CONFIG.demoPlay && !D.connected) { App.simPlay(); return; }
     if (!D.connected) { App.connect(); return; }
     if (D.myTicket) return;
+    if (!CONFIG.testnet && !localStorage.getItem("manthan_consent")) {
+      $("consentOv").classList.add("on"); return;
+    }
     if (CONFIG.demoMode) {
       D.myTicket = true; D.round.players += 1;
       App.render();
@@ -295,36 +577,66 @@ const App = {
     $("verifyResult").style.color = "var(--gold)";
   },
   countdown() {
-    const ms = Math.max(0, D.round.deadline - Date.now());
+    if (Sim.active && Date.now() >= Sim.deadline) { App.simFinish(); return; }
+    const ms = Math.max(0, (Sim.active ? Sim.deadline : D.round.deadline) - Date.now());
     const h = String(Math.floor(ms / 3600000)).padStart(2, "0");
     const m = String(Math.floor(ms % 3600000 / 60000)).padStart(2, "0");
     const s = String(Math.floor(ms % 60000 / 1000)).padStart(2, "0");
     $("countdown").textContent = `${h}:${m}:${s}`;
   },
   render() {
-    const prize = Math.round(D.round.players * CONFIG.betAmount * 0.88 * 10) / 10;
-    $("roundLabel").textContent = T.round(D.round.id);
-    $("prize").textContent = prize.toLocaleString(lang);
-    $("fillBar").style.width = (D.round.players / CONFIG.maxPlayers * 100) + "%";
-    $("partLabel").textContent = T.part(D.round.players, CONFIG.maxPlayers);
-    $("betBtn").textContent = D.myTicket ? T.inRound : T.bet(CONFIG.betAmount);
-    $("betBtn").disabled = D.myTicket;
-    $("betHint").textContent = T.betHint(D.round.players + (D.myTicket ? 0 : 1));
-    $("jpFundMini").textContent = D.jackpot.fund.toLocaleString(lang) + " GRAM";
-    const jd = Math.floor((D.jackpot.deadline - Date.now()) / 86400000);
-    const jh = Math.floor((D.jackpot.deadline - Date.now()) % 86400000 / 3600000);
-    $("jpDays").textContent = T.days(jd) + " ›";
-    $("jpWhen").textContent = T.jpWhen(jd, jh);
-    $("jpFund").textContent = D.jackpot.fund.toLocaleString(lang);
-    $("jpPlays").textContent = `${D.jackpot.myPlays} / ${CONFIG.minPlays}`;
-    $("jpBar").style.width = Math.min(100, D.jackpot.myPlays / CONFIG.minPlays * 100) + "%";
-    $("jpHint").textContent = T.jpHint(Math.max(0, CONFIG.minPlays - D.jackpot.myPlays));
-    $("jpTickets").textContent = D.jackpot.myTickets;
-    $("jpTotal").textContent = D.jackpot.totalTickets.toLocaleString(lang);
-    $("jpChance").textContent = D.jackpot.myTickets > 0
-      ? (D.jackpot.myTickets / D.jackpot.totalTickets * 100).toFixed(2) + "%" : "—";
+    const demoUser = CONFIG.demoPlay && !D.connected;
+    $("demoBal").style.display = demoUser ? "" : "none";
+    if (demoUser) $("demoBal").textContent = T.demoBal(Sim.balance.toLocaleString(lang));
+    if (Sim.active) {
+      const prize = Math.round(Sim.players * CONFIG.betAmount * 0.88 * 10) / 10;
+      $("roundLabel").textContent = T.demoRoundLabel;
+      $("prize").textContent = prize.toLocaleString(lang);
+      $("fillBar").style.width = (Sim.players / CONFIG.maxPlayers * 100) + "%";
+      $("partLabel").textContent = T.part(Sim.players, Sim.players);
+      $("betBtn").textContent = T.inRound;
+      $("betBtn").disabled = true;
+      $("betHint").textContent = T.betHint(Sim.players);
+    } else {
+      const prize = Math.round(D.round.players * CONFIG.betAmount * 0.88 * 10) / 10;
+      $("roundLabel").textContent = T.round(D.round.id);
+      $("prize").textContent = prize.toLocaleString(lang);
+      $("fillBar").style.width = (D.round.players / CONFIG.maxPlayers * 100) + "%";
+      $("partLabel").textContent = T.part(D.round.players, CONFIG.maxPlayers);
+      $("betBtn").textContent = D.myTicket ? T.inRound
+        : demoUser ? T.demoBet(CONFIG.betAmount) : T.bet(CONFIG.betAmount);
+      $("betBtn").disabled = D.myTicket;
+      $("betHint").textContent = demoUser ? T.demoHint
+        : T.betHint(D.round.players + (D.myTicket ? 0 : 1));
+    }
+    let jpFund, jpWhenTxt, jpDaysTxt, jpPlays, jpTickets, jpTotal;
+    if (demoUser) {
+      const jp = Sim.jp;
+      jpFund = jp.fund; jpPlays = jp.plays;
+      jpTickets = jp.plays >= CONFIG.minPlays ? jp.losses : 0;
+      jpTotal = jpTickets + jp.bots;
+      jpWhenTxt = T.jpDemoWhen; jpDaysTxt = "🎮 ›";
+    } else {
+      jpFund = D.jackpot.fund; jpPlays = D.jackpot.myPlays;
+      jpTickets = D.jackpot.myTickets; jpTotal = D.jackpot.totalTickets;
+      const jd = Math.floor((D.jackpot.deadline - Date.now()) / 86400000);
+      const jh = Math.floor((D.jackpot.deadline - Date.now()) % 86400000 / 3600000);
+      jpWhenTxt = T.jpWhen(jd, jh); jpDaysTxt = T.days(jd) + " ›";
+    }
+    $("jpFundMini").textContent = jpFund.toLocaleString(lang) + " GRAM";
+    $("jpDays").textContent = jpDaysTxt;
+    $("jpWhen").textContent = jpWhenTxt;
+    $("jpFund").textContent = jpFund.toLocaleString(lang);
+    $("jpPlays").textContent = `${jpPlays} / ${CONFIG.minPlays}`;
+    $("jpBar").style.width = Math.min(100, jpPlays / CONFIG.minPlays * 100) + "%";
+    $("jpHint").textContent = T.jpHint(Math.max(0, CONFIG.minPlays - jpPlays));
+    $("jpTickets").textContent = jpTickets;
+    $("jpTotal").textContent = jpTotal.toLocaleString(lang);
+    $("jpChance").textContent = jpTickets > 0
+      ? (jpTickets / jpTotal * 100).toFixed(2) + "%" : "—";
+    $("jpDrawBtn").style.display = demoUser && jpTickets > 0 ? "" : "none";
     $("histList").innerHTML = D.history.map(h =>
-      `<div class="item"><span>#${h.id} · ${h.prize.toLocaleString(lang)} GRAM</span>` +
+      `<div class="item"><span>${h.demo ? "🎮 " + T.demoTag : "#" + h.id} · ${h.prize.toLocaleString(lang)} GRAM</span>` +
       `<span class="${h.win ? "win" : ""}" style="color:${h.win ? "var(--gold)" : "var(--dim)"}">` +
       (h.win ? `+${h.amount.toLocaleString(lang)} · ${T.win}` : T.lost) + `</span></div>`).join("");
     $("fairCommit").textContent = D.lastDraw.commit;
@@ -349,12 +661,25 @@ const App = {
     $("n_jackpot").textContent = T.jackpot;
     $("n_history").textContent = T.history;
     $("n_fair").textContent = T.fair;
+    $("n_rules").textContent = T.rules;
+    $("rulesBody").innerHTML = T.rulesHtml;
+    $("consentBody").innerHTML = T.consentHtml;
+    $("t_consentTitle").textContent = T.consentTitle;
+    $("t_consentChk").textContent = T.consentChk;
+    $("consentBtn").textContent = T.consentPlay;
+    $("t_testnetText").textContent = T.testnetText;
+    $("t_testnetOk").textContent = T.testnetOk;
+    $("resAgain").textContent = T.demoAgain;
+    $("resClose").textContent = T.demoClose;
+    $("jpDrawBtn").textContent = T.jpDemoDraw;
     $("walletBtn").textContent = T.connect;
+    $("langBtn").textContent = lang === "ru" ? "EN" : "RU";
   },
   init() {
     if (tg) { tg.ready(); tg.expand(); tg.setHeaderColor("#0E0E11"); tg.setBackgroundColor("#0E0E11"); }
     if (CONFIG.demoMode) $("demoBadge").style.display = "block";
     $("appName").textContent = CONFIG.appName;
+    D.history = [...Sim.loadHist(), ...D.history];  // демо-игры прошлых сессий
     if (!CONFIG.demoMode && window.TON_CONNECT_UI) {
       App.tc = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: CONFIG.manifestUrl });
       App.tc.onStatusChange((w) => {
@@ -365,6 +690,7 @@ const App = {
       });
     }
     App.initTexts(); App.render();
+    if (CONFIG.testnet) $("testnetOv").classList.add("on");
     setInterval(App.countdown, 1000); App.countdown();
     if (!CONFIG.demoMode) { Chain.refresh(); setInterval(Chain.refresh, 15000); }
   }

@@ -247,6 +247,9 @@ const STR = {
     jpDemoDraw: "Разыграть демо-джекпот",
     jpDemoWin: (p) => `🏆 Джекпот ваш! +${p} GRAM на демо-счёт. Счётчики новой недели — с нуля.`,
     jpDemoLose: "Джекпот забрал другой игрок — билетов у него было больше. Новая неделя, счётчики обнулены.",
+    histEmpty: "Настоящих розыгрышей ещё не было — всё впереди",
+    winnerShort: (a) => `выиграл ${a.slice(0, 6)}…${a.slice(-4)}`,
+    verifyNone: "Розыгрышей ещё не было — проверять пока нечего",
     consentHtml: `<p>Подтвердите, что вы понимаете правила игры:</p><ul>
       <li>Это игра на реальные средства. Выигрыш не гарантирован, потеря ставки — обычный исход.</li>
       <li>Транзакции в блокчейне необратимы: отправленную ставку нельзя отменить.</li>
@@ -319,6 +322,9 @@ const STR = {
     jpDemoDraw: "Draw the demo jackpot",
     jpDemoWin: (p) => `🏆 The jackpot is yours! +${p} GRAM to your demo account. New week, counters start from zero.`,
     jpDemoLose: "Another player took the jackpot — they had more tickets. New week, counters reset.",
+    histEmpty: "No real draws yet — coming soon",
+    winnerShort: (a) => `won by ${a.slice(0, 6)}…${a.slice(-4)}`,
+    verifyNone: "No draws have happened yet — nothing to verify",
     consentHtml: `<p>Please confirm you understand the rules of the game:</p><ul>
       <li>This game involves real money. Winning is not guaranteed; losing your stake is a normal outcome.</li>
       <li>Blockchain transactions are irreversible: a placed bet cannot be cancelled.</li>
@@ -364,19 +370,12 @@ const STR = {
 // get-методов контрактов через toncenter API (тот же интерфейс)
 // ============================================================
 const DemoData = {
-  round: { id: 482, players: 847, deadline: Date.now() + 4365000 },
-  jackpot: { fund: 2310, deadline: Date.now() + 4 * 86400000 + 7 * 3600000, totalTickets: 1964, myPlays: 5, myTickets: 0 },
-  history: [
-    { id: 481, prize: 812.2, win: false }, { id: 480, prize: 880, win: false },
-    { id: 479, prize: 748.4, win: true, amount: 748.4 }, { id: 478, prize: 616, win: false },
-    { id: 477, prize: 880, win: false },
-  ],
-  lastDraw: {
-    commit: "a3f8c2…9d41e7 (опубликован до раунда)",
-    secret: "0x00c0ffee123456789…",
-    winnerIndex: 634,
-  },
-  myTicket: false, connected: false,
+  // нули до первого ответа контрактов — никаких выдуманных цифр
+  round: { id: 0, players: 0, deadline: 0 },
+  jackpot: { fund: 0, deadline: 0, totalTickets: 0, myPlays: 0, myTickets: 0 },
+  history: [],
+  lastDraw: null,          // заполнится, когда пройдёт настоящий розыгрыш
+  myTicket: false, connected: false, wallet: null,
 };
 
 // ============================================================
@@ -386,13 +385,58 @@ const DemoData = {
 // ЖИВЫЕ ДАННЫЕ ИЗ TESTNET (при demoMode=false)
 // Чтение get-методов контрактов через публичный API toncenter
 // ============================================================
+// --- Минимальные BOC-утилиты (аргументы get-методов и разбор тел сообщений) ---
+const Boc = {
+  // адрес ("0:hex" или friendly base64url) → BOC-слайс для стека get-метода
+  addressSlice(addr) {
+    let wc, hash;
+    if (addr.includes(":")) {
+      wc = parseInt(addr.split(":")[0], 10);
+      hash = addr.split(":")[1].match(/../g).map(h => parseInt(h, 16));
+    } else {
+      const raw = Uint8Array.from(atob(addr.replace(/-/g, "+").replace(/_/g, "/")), c => c.charCodeAt(0));
+      wc = raw[1] << 24 >> 24; hash = [...raw.slice(2, 34)];
+    }
+    const bits = [1, 0, 0];                       // addr_std$10 + без anycast
+    for (let i = 7; i >= 0; i--) bits.push((wc >> i) & 1);
+    for (const b of hash) for (let i = 7; i >= 0; i--) bits.push((b >> i) & 1);
+    bits.push(1); while (bits.length % 8) bits.push(0);   // completion tag
+    const data = new Uint8Array(bits.length / 8);
+    bits.forEach((b, i) => { if (b) data[i >> 3] |= 1 << (7 - (i & 7)); });
+    const boc = new Uint8Array(13 + data.length);
+    boc.set([0xB5, 0xEE, 0x9C, 0x72, 1, 1, 1, 1, 0, 2 + data.length, 0, 0, 67]);
+    boc.set(data, 13);
+    return btoa(String.fromCharCode(...boc));
+  },
+  // побитовый читатель первой ячейки BOC (тела сообщений контракта)
+  reader(b64) {
+    try {
+      const raw = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+      let p = 4;
+      const flags = raw[p++], sz = flags & 7, off = raw[p++];
+      const rd = n => { let v = 0; while (n--) v = v * 256 + raw[p++]; return v; };
+      const cells = rd(sz), roots = rd(sz); rd(sz); rd(off);
+      p += roots * sz;
+      if (flags & 0x80) p += cells * off;         // пропустить индекс, если есть
+      p++;                                        // d1 корневой ячейки
+      const d2 = raw[p++];
+      const data = raw.slice(p, p + Math.ceil(d2 / 2));
+      let bit = 0;
+      return { bits(n) { let v = 0; while (n--) { v = v * 2 + ((data[bit >> 3] >> (7 - (bit & 7))) & 1); bit++; } return v; } };
+    } catch { return null; }
+  },
+};
+
+const sameAddr = (a, b) => a && b && a.toLowerCase() === b.toLowerCase();
+
 const Chain = {
   api: "https://testnet.toncenter.com/api/v2/runGetMethod",
-  async get(address, method) {
+  msgApi: "https://testnet.toncenter.com/api/v3/messages",
+  async get(address, method, stack = []) {
     const r = await fetch(Chain.api, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ address, method, stack: [] }),
+      body: JSON.stringify({ address, method, stack }),
     });
     const j = await r.json();
     if (!j.ok || j.result.exit_code !== 0) throw new Error("get failed");
@@ -410,8 +454,40 @@ const Chain = {
       D.jackpot.fund = fund / 1e9;
       D.jackpot.deadline = jpDeadline * 1000;
       D.jackpot.totalTickets = tickets;
+      // персональные данные подключённого кошелька — из тех же контрактов
+      if (D.connected && D.wallet) {
+        const arg = [["tvm.Slice", Boc.addressSlice(D.wallet)]];
+        const [ticket] = await Chain.get(CONFIG.contractLottery, "has_ticket", arg);
+        D.myTicket = ticket !== 0;
+        const [plays, wins, myTickets] = await Chain.get(CONFIG.contractJackpot, "get_player_stats", arg);
+        D.jackpot.myPlays = plays;
+        D.jackpot.myTickets = myTickets;
+      }
       App.render();
     } catch (e) { console.warn("chain refresh failed", e); }
+  },
+  // История розыгрышей: исходящие PrizeNotification (0x50525A31) контракта лотереи.
+  // Каждое такое сообщение = состоявшийся раунд: победитель, сумма, номер раунда.
+  async loadHistory() {
+    try {
+      const r = await fetch(Chain.msgApi + "?source="
+        + encodeURIComponent(CONFIG.contractLottery) + "&limit=64");
+      const j = await r.json();
+      const real = [];
+      for (const m of (j.messages || [])) {
+        const b = m.message_content && Boc.reader(m.message_content.body);
+        if (!b || b.bits(32) !== 0x50525A31) continue;
+        const roundId = b.bits(32);
+        const prize = Math.round(+m.value / 1e9 * 100) / 100;
+        real.push({
+          id: roundId, prize, amount: prize, winner: m.destination,
+          win: sameAddr(m.destination, D.wallet),
+        });
+      }
+      real.sort((a, b2) => b2.id - a.id);
+      D.history = [...D.history.filter(h => h.demo), ...real];
+      App.render();
+    } catch (e) { console.warn("history load failed", e); }
   },
 };
 
@@ -572,7 +648,13 @@ const App = {
     App.render();
   },
   verify() {
-    // пересчёт honesty-хеша на устройстве (в testnet — реальный keccak/sha256 от secret+seed)
+    // пока не было настоящих розыгрышей — проверять нечего; честно говорим об этом.
+    // Реальный пересчёт commit-reveal появится вместе с первым розыгрышем.
+    if (!D.lastDraw) {
+      $("verifyResult").textContent = T.verifyNone;
+      $("verifyResult").style.color = "var(--dim)";
+      return;
+    }
     $("verifyResult").textContent = T.verifyOk;
     $("verifyResult").style.color = "var(--gold)";
   },
@@ -635,13 +717,20 @@ const App = {
     $("jpChance").textContent = jpTickets > 0
       ? (jpTickets / jpTotal * 100).toFixed(2) + "%" : "—";
     $("jpDrawBtn").style.display = demoUser && jpTickets > 0 ? "" : "none";
-    $("histList").innerHTML = D.history.map(h =>
-      `<div class="item"><span>${h.demo ? "🎮 " + T.demoTag : "#" + h.id} · ${h.prize.toLocaleString(lang)} GRAM</span>` +
-      `<span class="${h.win ? "win" : ""}" style="color:${h.win ? "var(--gold)" : "var(--dim)"}">` +
-      (h.win ? `+${h.amount.toLocaleString(lang)} · ${T.win}` : T.lost) + `</span></div>`).join("");
-    $("fairCommit").textContent = D.lastDraw.commit;
-    $("fairSecret").textContent = D.lastDraw.secret;
-    $("fairWinner").textContent = "#" + D.lastDraw.winnerIndex;
+    $("histList").innerHTML = D.history.length === 0
+      ? `<div class="item"><span style="color:var(--dim)">${T.histEmpty}</span></div>`
+      : D.history.map(h => {
+        const left = `${h.demo ? "🎮 " + T.demoTag : "#" + h.id} · ${h.prize.toLocaleString(lang)} GRAM`;
+        const right = h.win
+          ? `<span class="win" style="color:var(--gold)">+${h.amount.toLocaleString(lang)} · ${T.win}</span>`
+          : h.winner
+            ? `<span style="color:var(--dim)">${T.winnerShort(h.winner)}</span>`
+            : `<span style="color:var(--dim)">${T.lost}</span>`;
+        return `<div class="item"><span>${left}</span>${right}</div>`;
+      }).join("");
+    $("fairCommit").textContent = D.lastDraw ? D.lastDraw.commit : "—";
+    $("fairSecret").textContent = D.lastDraw ? D.lastDraw.secret : "—";
+    $("fairWinner").textContent = D.lastDraw ? "#" + D.lastDraw.winnerIndex : "—";
   },
   initTexts() {
     $("t_untilDraw").textContent = T.untilDraw;
@@ -684,15 +773,21 @@ const App = {
       App.tc = new TON_CONNECT_UI.TonConnectUI({ manifestUrl: CONFIG.manifestUrl });
       App.tc.onStatusChange((w) => {
         D.connected = !!w;
+        D.wallet = w ? w.account.address : null;   // raw-форма "0:hex"
+        if (!w) { D.myTicket = false; D.jackpot.myPlays = 0; D.jackpot.myTickets = 0; }
         $("walletBtn").textContent = w
           ? w.account.address.slice(0, 4) + "…" + w.account.address.slice(-4)
           : T.connect;
+        Chain.refresh(); Chain.loadHistory();      // подтянуть персональные данные
       });
     }
     App.initTexts(); App.render();
     if (CONFIG.testnet) $("testnetOv").classList.add("on");
     setInterval(App.countdown, 1000); App.countdown();
-    if (!CONFIG.demoMode) { Chain.refresh(); setInterval(Chain.refresh, 15000); }
+    if (!CONFIG.demoMode) {
+      Chain.refresh(); setInterval(Chain.refresh, 15000);
+      Chain.loadHistory(); setInterval(Chain.loadHistory, 60000);
+    }
   }
 };
 App.init();
